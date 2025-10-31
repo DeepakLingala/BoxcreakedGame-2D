@@ -1,24 +1,30 @@
 using UnityEngine;
 using System.Collections;
-using System.Collections.Generic; // Required for List
+using System.Collections.Generic;
+using UnityEngine.SceneManagement;
+using TMPro; // For TextMeshPro
+using UnityEngine.UI; // <-- REQUIRED for Button UI
 
 public class LevelManager : MonoBehaviour
 {
-    // Configuration for the level
     [Header("Level Configuration")]
     [SerializeField] private BoxCell originalBox;
-    [SerializeField] private float offsetX = 1.5f; // Spacing between boxes
+    [SerializeField] private float offsetX = 1.5f;
     [SerializeField] private float offsetY = 1.5f;
-    [SerializeField] private int currentGridSize = 2; // Starts at 2x2
+    [SerializeField] private int currentGridSize = 2;
     [SerializeField] private int totalLevels = 5;
 
     [Header("Timer Configuration")]
-    [SerializeField] private float timeLimitPerLevel = 10.0f; // Time in seconds
-    [SerializeField] private TextMesh timerLabel; // Drag your Timer TextMesh here
+    [SerializeField] private float timeLimitPerLevel = 10.0f;
+    [SerializeField] private TextMeshProUGUI timerLabel; 
 
-    [Header("UI")]
-    [SerializeField] private TextMesh scoreLabel; // Drag your Score TextMesh here
-    [SerializeField] private TextMesh levelLabel; // Drag your Level TextMesh here
+    [Header("UI (Canvas)")]
+    [SerializeField] private TextMeshProUGUI scoreLabel; 
+    [SerializeField] private TextMeshProUGUI levelLabel; 
+
+    // --- NEW: Pause Menu UI ---
+    [Header("Pause Menu")]
+    [SerializeField] private GameObject pauseMenuPanel; // The panel holding Resume, Restart, Exit
 
     // --- Private Game State ---
     private int _score = 0;
@@ -27,8 +33,8 @@ public class LevelManager : MonoBehaviour
     private int _totalCandies;
     private float _currentTime;
     private bool _isTimerRunning = false;
+    private bool _isGamePaused = false; // NEW: Tracks pause state
 
-    // Public getter for BoxCell to check game state
     public bool IsTimerRunning()
     {
         return _isTimerRunning;
@@ -38,26 +44,34 @@ public class LevelManager : MonoBehaviour
 
     void Start()
     {
-        // Position the UI elements based on the camera first
-        PositionUI();
-        // Then load the first level
+        // Ensure the template is active
+        if(originalBox != null)
+        {
+            originalBox.gameObject.SetActive(true);
+        }
+        
+        // --- NEW: Hide pause menu on start ---
+        _isGamePaused = false;
+        pauseMenuPanel.SetActive(false);
+        Time.timeScale = 1f; // Ensure time is running
+        
         LoadLevel(currentGridSize);
     }
     
     void Update()
     {
-        if (_isTimerRunning)
+        // Only run the timer if the game is NOT paused
+        if (_isTimerRunning && !_isGamePaused)
         {
             _currentTime -= Time.deltaTime;
-            timerLabel.text = $"Time: {_currentTime:F1}"; // Display time with one decimal
+            timerLabel.text = $"Time: {_currentTime:F1}";
 
-            // Check for time out
             if (_currentTime <= 0)
             {
                 _currentTime = 0;
                 _isTimerRunning = false;
                 timerLabel.text = "Time: 0.0";
-                StartCoroutine(GameOver(true)); // Pass true to indicate a time-out loss
+                StartCoroutine(GameOver(true));
             }
         }
     }
@@ -66,65 +80,101 @@ public class LevelManager : MonoBehaviour
 
     public void BoxClicked(BoxCell box)
     {
-        // Ignore clicks if the timer has stopped (e.g., game over)
-        if (!_isTimerRunning) return;
+        // --- MODIFIED: Don't allow clicks if paused ---
+        if (!_isTimerRunning || _isGamePaused) return;
 
         if (box.contentType == BoxCell.ContentType.Bomb)
         {
-            // Player loses by bomb!
-            Debug.Log("Game Over! You hit a bomb!");
-            StartCoroutine(GameOver(false)); // Pass false for bomb loss
+            StartCoroutine(GameOver(false));
         }
         else
         {
-            // Player found a candy
             _candiesRevealed++;
             _score++;
             scoreLabel.text = "Score: " + _score;
 
-            // Check for level win
             if (_candiesRevealed >= _totalCandies)
             {
-                Debug.Log($"Level {currentGridSize - 1} Complete!");
+                _isTimerRunning = false;
                 StartCoroutine(NextLevel());
             }
         }
     }
 
-    // --- Core Level Logic ---
+    //
+    // --- NEW: PAUSE MENU FUNCTIONS ---
+    //
+
+    // This function is for the main "Pause" button in the corner
+    public void TogglePauseMenu()
+    {
+        _isGamePaused = !_isGamePaused; // Flip the pause state
+
+        if (_isGamePaused)
+        {
+            // Pause the game
+            pauseMenuPanel.SetActive(true);
+            Time.timeScale = 0f; // This freezes all game time (and physics)
+        }
+        else
+        {
+            // Resume the game
+            pauseMenuPanel.SetActive(false);
+            Time.timeScale = 1f; // This resumes game time
+        }
+    }
+
+    // This function is for the "Resume" button INSIDE the panel
+    public void OnResumeButton()
+    {
+        _isGamePaused = false;
+        pauseMenuPanel.SetActive(false);
+        Time.timeScale = 1f;
+    }
+
+    // This function is for the "Restart" button INSIDE the panel
+    public void OnRestartButton()
+    {
+        // Unpause time before reloading the scene
+        Time.timeScale = 1f; 
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    // This function is for the "Exit" button INSIDE the panel
+    public void OnExitButton()
+    {
+        Debug.Log("Quitting game...");
+        Application.Quit(); // Note: This only works in a built game, not in the editor
+    }
+
+    //
+    // --- (Rest of the script is the same) ---
+    //
 
     private void LoadLevel(int size)
     {
-        // 1. Clear existing level
         CleanupLevel();
         
-        // 2. Set new grid size and counts
         currentGridSize = size;
         int totalCells = size * size;
-        _bombsCount = size - 1; // Example: 2x2=1 bomb, 3x3=2 bombs
-        
+        _bombsCount = size - 1; 
         _totalCandies = totalCells - _bombsCount;
         _candiesRevealed = 0;
 
         levelLabel.text = "Level " + (size - 1);
         scoreLabel.text = "Score: " + _score;
 
-        // 3. Setup and start the timer
         _currentTime = timeLimitPerLevel;
         _isTimerRunning = true;
         timerLabel.text = $"Time: {_currentTime:F1}";
 
-        // 4. Create a list of content types
         List<BoxCell.ContentType> contentList = new List<BoxCell.ContentType>();
         for (int i = 0; i < _totalCandies; i++) contentList.Add(BoxCell.ContentType.Candy);
         for (int i = 0; i < _bombsCount; i++) contentList.Add(BoxCell.ContentType.Bomb);
         
-        // 5. Shuffle the list
         ShuffleContentList(contentList);
 
-        // 6. Place boxes manually
         Vector3 startPos = originalBox.transform.position;
-        // Calculate offset to center the grid
         float centerOffset = (size - 1) * offsetX / 2f; 
 
         for (int row = 0; row < size; row++)
@@ -134,57 +184,26 @@ public class LevelManager : MonoBehaviour
                 BoxCell box;
                 int index = row * size + col;
                 
-                // Use the original for the first box, instantiate for the rest
                 if (index == 0)
                 {
                     box = originalBox;
-                    box.ResetBox(); // Reset the original prefab's state
+                    box.ResetBox();
                 }
                 else
                 {
                     box = Instantiate(originalBox);
                 }
 
-                // Set its position using manual calculation
                 float posX = startPos.x + (col * offsetX) - centerOffset;
                 float posY = startPos.y - (row * offsetY) + centerOffset;
                 box.transform.position = new Vector3(posX, posY, startPos.z);
                 
-                // Set the box's content (bomb or candy)
                 box.SetContent(contentList[index]);
+                box.gameObject.SetActive(true);
             }
         }
     }
 
-    // --- UI and Helper Methods ---
-
-    private void PositionUI()
-    {
-        Camera cam = Camera.main;
-        if (cam == null)
-        {
-            Debug.LogError("No Main Camera found in the scene!");
-            return;
-        }
-
-        // Get viewport corners in world coordinates
-        Vector3 topLeft = cam.ViewportToWorldPoint(new Vector3(0, 1, cam.nearClipPlane));
-        Vector3 topRight = cam.ViewportToWorldPoint(new Vector3(1, 1, cam.nearClipPlane));
-        Vector3 topCenter = cam.ViewportToWorldPoint(new Vector3(0.5f, 1, cam.nearClipPlane));
-        
-        float padding = 0.5f; // Adjust this to add space from the edge
-        float uiZ = -1f; // Ensure UI is in front of the grid (at Z=0)
-
-        // SCORE (Top Left)
-        scoreLabel.transform.position = new Vector3(topLeft.x + padding, topLeft.y - padding, uiZ);
-        
-        // LEVEL (Top Center)
-        levelLabel.transform.position = new Vector3(topCenter.x, topLeft.y - padding, uiZ);
-        
-        // TIMER (Top Right)
-        timerLabel.transform.position = new Vector3(topRight.x - padding, topLeft.y - padding, uiZ);
-    }
-    
     private void ShuffleContentList(List<BoxCell.ContentType> list)
     {
         for (int i = list.Count - 1; i > 0; i--)
@@ -198,7 +217,6 @@ public class LevelManager : MonoBehaviour
 
     private void CleanupLevel()
     {
-        // Find all boxes except the original prefab template
         BoxCell[] oldBoxes = FindObjectsOfType<BoxCell>();
         foreach (BoxCell box in oldBoxes)
         {
@@ -209,45 +227,33 @@ public class LevelManager : MonoBehaviour
         }
     }
 
-    // --- Coroutines ---
-
     private IEnumerator NextLevel()
     {
-        _isTimerRunning = false; // Stop the timer on level completion
-        
         yield return new WaitForSeconds(1.5f);
-
         if (currentGridSize + 1 <= totalLevels + 1)
         {
             LoadLevel(currentGridSize + 1);
         }
         else
         {
-            Debug.Log("All Levels Complete! Game Won!");
             levelLabel.text = "YOU WIN!";
         }
     }
 
     private IEnumerator GameOver(bool timeOut)
     {
-        _isTimerRunning = false; // Stop the timer
+        _isTimerRunning = false; 
 
         if (timeOut)
         {
-            Debug.Log("Game Over! Time ran out!");
             levelLabel.text = "TIME OVER!"; 
         }
         else
         {
-            Debug.Log("Game Over! You hit a bomb!");
             levelLabel.text = "GAME OVER!"; 
         }
         
-        // Wait 3 seconds before reloading (or showing a menu)
         yield return new WaitForSeconds(3.0f);
-        
-        // Reload the current scene to restart
-        // Note: You need to add 'using UnityEngine.SceneManagement;' at the top
-        // SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 }
