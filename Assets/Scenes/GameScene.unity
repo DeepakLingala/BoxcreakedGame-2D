@@ -2492,6 +2492,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: BoxCell
       objectReference: {fileID: 0}
+    - target: {fileID: 154459962244722982, guid: 78f96f03400c65f409cd10cf2c50c08d, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1845600570294313357, guid: 78f96f03400c65f409cd10cf2c50c08d, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0.06
