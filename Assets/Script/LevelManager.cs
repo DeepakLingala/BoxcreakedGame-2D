@@ -2,8 +2,8 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
-using TMPro; // For TextMeshPro
-using UnityEngine.UI; // <-- REQUIRED for Button UI
+using TMPro;
+using UnityEngine.UI;
 
 public class LevelManager : MonoBehaviour
 {
@@ -22,9 +22,13 @@ public class LevelManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI scoreLabel; 
     [SerializeField] private TextMeshProUGUI levelLabel; 
 
-    // --- NEW: Pause Menu UI ---
     [Header("Pause Menu")]
-    [SerializeField] private GameObject pauseMenuPanel; // The panel holding Resume, Restart, Exit
+    [SerializeField] private GameObject pauseMenuPanel; 
+
+    // --- NEW: Scene Name for Main Menu ---
+    [Header("Scene Management")]
+    [SerializeField] private string mainMenuSceneName = "MainMenu"; // Make sure this matches your Main Menu scene name!
+
 
     // --- Private Game State ---
     private int _score = 0;
@@ -33,34 +37,33 @@ public class LevelManager : MonoBehaviour
     private int _totalCandies;
     private float _currentTime;
     private bool _isTimerRunning = false;
-    private bool _isGamePaused = false; // NEW: Tracks pause state
+    private bool _isGamePaused = false; 
 
     public bool IsTimerRunning()
     {
         return _isTimerRunning;
     }
 
-    // --- Unity Methods ---
-
     void Start()
     {
-        // Ensure the template is active
         if(originalBox != null)
         {
             originalBox.gameObject.SetActive(true);
         }
         
-        // --- NEW: Hide pause menu on start ---
         _isGamePaused = false;
-        pauseMenuPanel.SetActive(false);
-        Time.timeScale = 1f; // Ensure time is running
-        
+        if (pauseMenuPanel != null) // Safety check
+        {
+            pauseMenuPanel.SetActive(false);
+        }
+        Time.timeScale = 1f; 
+        AudioListener.pause = false; // Ensure sound is not paused initially
+
         LoadLevel(currentGridSize);
     }
     
     void Update()
     {
-        // Only run the timer if the game is NOT paused
         if (_isTimerRunning && !_isGamePaused)
         {
             _currentTime -= Time.deltaTime;
@@ -76,11 +79,8 @@ public class LevelManager : MonoBehaviour
         }
     }
 
-    // --- Public Game Flow ---
-
     public void BoxClicked(BoxCell box)
     {
-        // --- MODIFIED: Don't allow clicks if paused ---
         if (!_isTimerRunning || _isGamePaused) return;
 
         if (box.contentType == BoxCell.ContentType.Bomb)
@@ -101,60 +101,60 @@ public class LevelManager : MonoBehaviour
         }
     }
 
-    //
-    // --- NEW: PAUSE MENU FUNCTIONS ---
-    //
+    // --- PAUSE MENU FUNCTIONS ---
 
-    // This function is for the main "Pause" button in the corner
     public void TogglePauseMenu()
     {
-        _isGamePaused = !_isGamePaused; // Flip the pause state
+        _isGamePaused = !_isGamePaused;
+
+        if (pauseMenuPanel == null) // Safety check
+        {
+            Debug.LogError("Pause Menu Panel is not assigned in LevelManager!");
+            return;
+        }
 
         if (_isGamePaused)
         {
-            // Pause the game
             pauseMenuPanel.SetActive(true);
-            Time.timeScale = 0f; // This freezes all game time (and physics)
+            Time.timeScale = 0f; // Pause game time
+            AudioListener.pause = true; // Pause all audio
         }
         else
         {
-            // Resume the game
             pauseMenuPanel.SetActive(false);
-            Time.timeScale = 1f; // This resumes game time
+            Time.timeScale = 1f; // Resume game time
+            AudioListener.pause = false; // Resume all audio
         }
     }
 
-    // This function is for the "Resume" button INSIDE the panel
     public void OnResumeButton()
     {
         _isGamePaused = false;
-        pauseMenuPanel.SetActive(false);
+        if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
         Time.timeScale = 1f;
+        AudioListener.pause = false; // Ensure audio is resumed
     }
 
-    // This function is for the "Restart" button INSIDE the panel
     public void OnRestartButton()
     {
-        // Unpause time before reloading the scene
         Time.timeScale = 1f; 
+        AudioListener.pause = false; // Ensure audio is resumed
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
-    // This function is for the "Exit" button INSIDE the panel
-    public void OnExitButton()
+    // --- MODIFIED: Exit button now goes to Main Menu ---
+    public void OnMainMenuButton() 
     {
-        Debug.Log("Quitting game...");
-        Application.Quit(); // Note: This only works in a built game, not in the editor
+        Time.timeScale = 1f; // Always unpause time before changing scenes
+        AudioListener.pause = false; // Always unpause audio
+        SceneManager.LoadScene(mainMenuSceneName);
     }
 
-    //
-    // --- (Rest of the script is the same) ---
-    //
+    // --- Core Level Logic (unchanged) ---
 
     private void LoadLevel(int size)
     {
         CleanupLevel();
-        
         currentGridSize = size;
         int totalCells = size * size;
         _bombsCount = size - 1; 
