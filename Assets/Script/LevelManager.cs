@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using TMPro;
-using UnityEngine.UI;
+using UnityEngine.UI; 
 
 public class LevelManager : MonoBehaviour
 {
@@ -18,14 +18,21 @@ public class LevelManager : MonoBehaviour
     [SerializeField] private float timeLimitPerLevel = 10.0f;
     [SerializeField] private TextMeshProUGUI timerLabel; 
 
-    [Header("UI (Canvas)")]
+    [Header("Main Game UI")] // Renamed for clarity
     [SerializeField] private TextMeshProUGUI scoreLabel; 
     [SerializeField] private TextMeshProUGUI levelLabel; 
 
     [Header("Pause Menu")]
     [SerializeField] private GameObject pauseMenuPanel; 
 
-    // --- NEW: Scene Name for Main Menu ---
+    // --- NEW: Game Over UI and Sound ---
+    [Header("Game Over UI")]
+    [SerializeField] private GameObject gameOverPanel; // The UI Panel that pops up
+    [SerializeField] private TextMeshProUGUI gameOverText; // Text inside the panel (e.g., "GAME OVER!", "TIME OVER!")
+    [SerializeField] private Button gameOverRestartButton; // Button on game over panel
+    [SerializeField] private Button gameOverMainMenuButton; // Button on game over panel
+    [SerializeField] private AudioClip gameOverSound; // Sound effect for game over
+
     [Header("Scene Management")]
     [SerializeField] private string mainMenuSceneName = "MainMenu"; // Make sure this matches your Main Menu scene name!
 
@@ -38,10 +45,23 @@ public class LevelManager : MonoBehaviour
     private float _currentTime;
     private bool _isTimerRunning = false;
     private bool _isGamePaused = false; 
+    private AudioSource levelAudioSource; // NEW: AudioSource for LevelManager sounds
 
     public bool IsTimerRunning()
     {
         return _isTimerRunning;
+    }
+
+    void Awake() // Changed to Awake to get AudioSource early
+    {
+        // Get or add an AudioSource for playing sounds like GameOverSound
+        levelAudioSource = GetComponent<AudioSource>();
+        if (levelAudioSource == null)
+        {
+            levelAudioSource = gameObject.AddComponent<AudioSource>();
+            levelAudioSource.playOnAwake = false;
+            levelAudioSource.spatialBlend = 0;
+        }
     }
 
     void Start()
@@ -52,12 +72,11 @@ public class LevelManager : MonoBehaviour
         }
         
         _isGamePaused = false;
-        if (pauseMenuPanel != null) // Safety check
-        {
-            pauseMenuPanel.SetActive(false);
-        }
+        if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
+        if (gameOverPanel != null) gameOverPanel.SetActive(false); // Ensure game over panel is hidden on start
+
         Time.timeScale = 1f; 
-        AudioListener.pause = false; // Ensure sound is not paused initially
+        AudioListener.pause = false; 
 
         LoadLevel(currentGridSize);
     }
@@ -107,7 +126,7 @@ public class LevelManager : MonoBehaviour
     {
         _isGamePaused = !_isGamePaused;
 
-        if (pauseMenuPanel == null) // Safety check
+        if (pauseMenuPanel == null) 
         {
             Debug.LogError("Pause Menu Panel is not assigned in LevelManager!");
             return;
@@ -116,14 +135,14 @@ public class LevelManager : MonoBehaviour
         if (_isGamePaused)
         {
             pauseMenuPanel.SetActive(true);
-            Time.timeScale = 0f; // Pause game time
-            AudioListener.pause = true; // Pause all audio
+            Time.timeScale = 0f; 
+            AudioListener.pause = true; 
         }
         else
         {
             pauseMenuPanel.SetActive(false);
-            Time.timeScale = 1f; // Resume game time
-            AudioListener.pause = false; // Resume all audio
+            Time.timeScale = 1f; 
+            AudioListener.pause = false; 
         }
     }
 
@@ -132,23 +151,40 @@ public class LevelManager : MonoBehaviour
         _isGamePaused = false;
         if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
         Time.timeScale = 1f;
-        AudioListener.pause = false; // Ensure audio is resumed
+        AudioListener.pause = false; 
     }
 
-    public void OnRestartButton()
+    public void OnRestartButton() // Used by Pause Menu
     {
         Time.timeScale = 1f; 
-        AudioListener.pause = false; // Ensure audio is resumed
+        AudioListener.pause = false; 
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
-    // --- MODIFIED: Exit button now goes to Main Menu ---
-    public void OnMainMenuButton() 
+    public void OnMainMenuButton() // Used by Pause Menu
     {
-        Time.timeScale = 1f; // Always unpause time before changing scenes
-        AudioListener.pause = false; // Always unpause audio
+        Time.timeScale = 1f; 
+        AudioListener.pause = false; 
         SceneManager.LoadScene(mainMenuSceneName);
     }
+    
+    // --- NEW: Game Over Panel Button Functions ---
+    // These functions are separate from the pause menu's restart/main menu
+    // as they will be called from buttons on the gameOverPanel.
+    public void OnGameOverRestartButton()
+    {
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    public void OnGameOverMainMenuButton()
+    {
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+        SceneManager.LoadScene(mainMenuSceneName);
+    }
+
 
     // --- Core Level Logic (unchanged) ---
 
@@ -237,23 +273,38 @@ public class LevelManager : MonoBehaviour
         else
         {
             levelLabel.text = "YOU WIN!";
+            // Potentially show a "Game Won" panel here too!
         }
     }
 
+    // --- MODIFIED: Game Over Coroutine ---
     private IEnumerator GameOver(bool timeOut)
     {
         _isTimerRunning = false; 
+        Time.timeScale = 0f; // Freeze game immediately
+        AudioListener.pause = true; // Pause all sounds
 
-        if (timeOut)
+        // Play game over sound effect
+        if (levelAudioSource != null && gameOverSound != null)
         {
-            levelLabel.text = "TIME OVER!"; 
+            levelAudioSource.PlayOneShot(gameOverSound);
+        }
+
+        // Activate and set text for the game over panel
+        if (gameOverPanel != null && gameOverText != null)
+        {
+            gameOverPanel.SetActive(true);
+            gameOverText.text = timeOut ? "TIME OVER!" : "GAME OVER!";
         }
         else
         {
-            levelLabel.text = "GAME OVER!"; 
+            Debug.LogError("Game Over Panel or Text is not assigned in LevelManager!");
+            // Fallback for debug if UI isn't set up
+            Debug.Log(timeOut ? "TIME OVER!" : "GAME OVER!");
         }
-        
-        yield return new WaitForSeconds(3.0f);
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+
+        // Wait for a button click on the Game Over panel
+        // The panel's buttons will handle loading the scene
+        // No yield return new WaitForSeconds() here, as we wait for player interaction.
     }
 }
