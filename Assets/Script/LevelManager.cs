@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using TMPro;
-using UnityEngine.UI; 
+using UnityEngine.UI;
 
 public class LevelManager : MonoBehaviour
 {
@@ -18,24 +18,24 @@ public class LevelManager : MonoBehaviour
     [SerializeField] private float timeLimitPerLevel = 10.0f;
     [SerializeField] private TextMeshProUGUI timerLabel; 
 
-    [Header("Main Game UI")] // Renamed for clarity
+    [Header("Main Game UI")]
     [SerializeField] private TextMeshProUGUI scoreLabel; 
     [SerializeField] private TextMeshProUGUI levelLabel; 
 
     [Header("Pause Menu")]
     [SerializeField] private GameObject pauseMenuPanel; 
 
-    // --- NEW: Game Over UI and Sound ---
     [Header("Game Over UI")]
-    [SerializeField] private GameObject gameOverPanel; // The UI Panel that pops up
-    [SerializeField] private TextMeshProUGUI gameOverText; // Text inside the panel (e.g., "GAME OVER!", "TIME OVER!")
-    [SerializeField] private Button gameOverRestartButton; // Button on game over panel
-    [SerializeField] private Button gameOverMainMenuButton; // Button on game over panel
-    [SerializeField] private AudioClip gameOverSound; // Sound effect for game over
+    [SerializeField] private GameObject gameOverPanel;
+    [SerializeField] private Image gameOverGraphic;
+    [SerializeField] private Sprite gameOverSprite;
+    [SerializeField] private Sprite timeOverSprite;
+    [SerializeField] private Button gameOverRestartButton; 
+    [SerializeField] private Button gameOverMainMenuButton; 
+    [SerializeField] private AudioClip gameOverSound; 
 
     [Header("Scene Management")]
-    [SerializeField] private string mainMenuSceneName = "MainMenu"; // Make sure this matches your Main Menu scene name!
-
+    [SerializeField] private string mainMenuSceneName = "MainMenu"; 
 
     // --- Private Game State ---
     private int _score = 0;
@@ -45,16 +45,15 @@ public class LevelManager : MonoBehaviour
     private float _currentTime;
     private bool _isTimerRunning = false;
     private bool _isGamePaused = false; 
-    private AudioSource levelAudioSource; // NEW: AudioSource for LevelManager sounds
+    private AudioSource levelAudioSource; 
 
     public bool IsTimerRunning()
     {
         return _isTimerRunning;
     }
 
-    void Awake() // Changed to Awake to get AudioSource early
+    void Awake() 
     {
-        // Get or add an AudioSource for playing sounds like GameOverSound
         levelAudioSource = GetComponent<AudioSource>();
         if (levelAudioSource == null)
         {
@@ -73,7 +72,7 @@ public class LevelManager : MonoBehaviour
         
         _isGamePaused = false;
         if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
-        if (gameOverPanel != null) gameOverPanel.SetActive(false); // Ensure game over panel is hidden on start
+        if (gameOverPanel != null) gameOverPanel.SetActive(false); 
 
         Time.timeScale = 1f; 
         AudioListener.pause = false; 
@@ -120,8 +119,6 @@ public class LevelManager : MonoBehaviour
         }
     }
 
-    // --- PAUSE MENU FUNCTIONS ---
-
     public void TogglePauseMenu()
     {
         _isGamePaused = !_isGamePaused;
@@ -154,23 +151,20 @@ public class LevelManager : MonoBehaviour
         AudioListener.pause = false; 
     }
 
-    public void OnRestartButton() // Used by Pause Menu
+    public void OnRestartButton() 
     {
         Time.timeScale = 1f; 
         AudioListener.pause = false; 
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
-    public void OnMainMenuButton() // Used by Pause Menu
+    public void OnMainMenuButton() 
     {
         Time.timeScale = 1f; 
         AudioListener.pause = false; 
         SceneManager.LoadScene(mainMenuSceneName);
     }
     
-    // --- NEW: Game Over Panel Button Functions ---
-    // These functions are separate from the pause menu's restart/main menu
-    // as they will be called from buttons on the gameOverPanel.
     public void OnGameOverRestartButton()
     {
         Time.timeScale = 1f;
@@ -184,9 +178,6 @@ public class LevelManager : MonoBehaviour
         AudioListener.pause = false;
         SceneManager.LoadScene(mainMenuSceneName);
     }
-
-
-    // --- Core Level Logic (unchanged) ---
 
     private void LoadLevel(int size)
     {
@@ -273,38 +264,33 @@ public class LevelManager : MonoBehaviour
         else
         {
             levelLabel.text = "YOU WIN!";
-            // Potentially show a "Game Won" panel here too!
         }
     }
 
-    // --- MODIFIED: Game Over Coroutine ---
     private IEnumerator GameOver(bool timeOut)
     {
         _isTimerRunning = false; 
-        Time.timeScale = 0f; // Freeze game immediately
-        AudioListener.pause = true; // Pause all sounds
+        Time.timeScale = 0f; 
+        AudioListener.pause = true; 
 
-        // Play game over sound effect
         if (levelAudioSource != null && gameOverSound != null)
         {
             levelAudioSource.PlayOneShot(gameOverSound);
         }
 
-        // Activate and set text for the game over panel
-        if (gameOverPanel != null && gameOverText != null)
+        if (gameOverPanel != null && gameOverGraphic != null)
         {
             gameOverPanel.SetActive(true);
-            gameOverText.text = timeOut ? "TIME OVER!" : "GAME OVER!";
+            gameOverGraphic.sprite = timeOut ? timeOverSprite : gameOverSprite;
+            gameOverGraphic.gameObject.SetActive(true);
         }
         else
         {
-            Debug.LogError("Game Over Panel or Text is not assigned in LevelManager!");
-            // Fallback for debug if UI isn't set up
+            Debug.LogError("Game Over Panel, Graphic, or Sprites are not assigned in LevelManager!");
             Debug.Log(timeOut ? "TIME OVER!" : "GAME OVER!");
         }
-
-        // Wait for a button click on the Game Over panel
-        // The panel's buttons will handle loading the scene
-        // No yield return new WaitForSeconds() here, as we wait for player interaction.
+        
+        // --- FIX: Add yield break; to correctly end the coroutine ---
+        yield break; 
     }
 }
